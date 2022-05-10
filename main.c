@@ -14,6 +14,7 @@
 #include <leds.h>
 #include <pi_regulator.h>
 #include <process_image.h>
+#include <state_machine.h>
 
 void SendUint8ToComputer(uint8_t* data, uint16_t size) 
 {
@@ -52,11 +53,8 @@ int main(void)
 	motors_init();
 	//set_led(LED7, 1);
 
-	left_motor_set_speed(200);
-	right_motor_set_speed(-200);
-	pi_regulator_start();
 	process_image_start();
-
+	start_state_machine();
     /* Infinite loop. */
     while (1) {
     	//waits 1 second

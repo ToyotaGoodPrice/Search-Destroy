@@ -10,15 +10,19 @@
 #include <pi_regulator.h>
 #include <process_image.h>
 
+#define SPEED 		350
+
+static thread_t *move_thread;
+
 //simple PI regulator implementation
-int16_t pi_regulator(float distance, float goal){
+int16_t pi_regulator(float dist_to_center, float goal){
 
 	float error = 0;
-	float speed = 0;
+	float speed_corr = 0;
 
 	static float sum_error = 0;
 
-	error = distance - goal;
+	error = dist_to_center - goal;
 
 	//disables the PI regulator if the error is to small
 	//this avoids to always move as we cannot exactly be where we want and 
@@ -36,9 +40,9 @@ int16_t pi_regulator(float distance, float goal){
 		sum_error = -MAX_SUM_ERROR;
 	}
 
-	speed = KP * error + KI * sum_error;
+	speed_corr = KP * error + KI * sum_error;
 
-    return (int16_t)speed;
+    return (int16_t)speed_corr;
 }
 
 static THD_WORKING_AREA(waPiRegulator, 256);
@@ -55,11 +59,9 @@ static THD_FUNCTION(PiRegulator, arg) {
     while(1){
         time = chVTGetSystemTime();
         
-        //computes the speed to give to the motors
-        //distance_cm is modified by the image processing thread
-        speed = pi_regulator(get_distance_cm(), GOAL_DISTANCE);
+
         //computes a correction factor to let the robot rotate to be in front of the line
-        speed_correction = (get_line_position() - (IMAGE_BUFFER_SIZE/2));
+        speed_correction =  pi_regulator(get_line_position() - 320, 0);
 
         //if the line is nearly in front of the camera, don't rotate
         if(abs(speed_correction) < ROTATION_THRESHOLD){
@@ -67,14 +69,18 @@ static THD_FUNCTION(PiRegulator, arg) {
         }
 
         //applies the speed from the PI regulator and the correction for the rotation
-		right_motor_set_speed(speed - ROTATION_COEFF * speed_correction);
-		left_motor_set_speed(speed + ROTATION_COEFF * speed_correction);
+		right_motor_set_speed(SPEED - speed_correction);
+		left_motor_set_speed(SPEED + speed_correction);
 
         //100Hz
         chThdSleepUntilWindowed(time, time + MS2ST(10));
     }
 }
 
-void pi_regulator_start(void){
-	//chThdCreateStatic(waPiRegulator, sizeof(waPiRegulator), NORMALPRIO, PiRegulator, NULL);
+void start_pi_move2obj(void){
+	move_thread = chThdCreateStatic(waPiRegulator, sizeof(waPiRegulator), NORMALPRIO, PiRegulator, NULL);
+}
+
+void stop_pi_move2obj(void) {
+	chThdTerminate(move_thread);
 }

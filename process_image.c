@@ -15,11 +15,12 @@
 #define HAS_NO_GREEN(pxl)			((pxl & 0xF70) < 0x0120)
 //#define IS_RED_OBJECT_SLOPE(bfr)	()
 
-static float distance_cm = 0;
+static float distance_cm = 0, angle = 0;
 static uint16_t line_position = IMAGE_BUFFER_SIZE/2;	//middle
-
+static uint8_t line_found = 0;
 //semaphore
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);
+static thread_t *cptr_img, *prcs_img;
 
 /*
  *  Returns the line's width extracted from the image buffer given
@@ -91,15 +92,13 @@ uint16_t extract_line_width(uint16_t *buffer){
 		begin = 0;
 		end = 0;
 		width = last_width;
+		line_found = 0;
 		set_led(LED7, 0);
-		left_motor_set_speed(200);
-		right_motor_set_speed(-200);
 	}else{
 		last_width = width = (end - begin);
 		line_position = (begin + end)/2; //gives the line position.
+		line_found = 1;
 		set_led(LED7, 1);
-		left_motor_set_speed(0);
-		right_motor_set_speed(0);
 	}
 
 	//sets a maximum width or returns the measured width
@@ -115,7 +114,6 @@ static THD_FUNCTION(CaptureImage, arg) {
 
     chRegSetThreadName(__FUNCTION__);
     (void)arg;
-
 	//Takes pixels 0 to IMAGE_BUFFER_SIZE of the line 10 + 11 (minimum 2 lines because reasons)
 	po8030_advanced_config(FORMAT_RGB565, 0, 160, IMAGE_BUFFER_SIZE, 2, SUBSAMPLING_X1, SUBSAMPLING_X1);
 	dcmi_enable_double_buffering();
@@ -123,6 +121,7 @@ static THD_FUNCTION(CaptureImage, arg) {
 	dcmi_prepare();
 
     while(1){
+    	//set_led(LED3, 0);
         //starts a capture
 		dcmi_capture_start();
 		//waits for the capture to be done
@@ -138,16 +137,15 @@ static THD_FUNCTION(ProcessImage, arg) {
 
     chRegSetThreadName(__FUNCTION__);
     (void)arg;
-
 	uint8_t *img_buff_ptr;
 	uint16_t image[IMAGE_BUFFER_SIZE] = {0};
 	uint16_t lineWidth = 0;
 
-	bool send_to_computer = true;
-
     while(1){
     	//waits until an image has been captured
         chBSemWait(&image_ready_sem);
+        //set_led(LED3, 1);
+
 		//gets the pointer to the array filled with the last image in RGB565    
 		img_buff_ptr = dcmi_get_last_image_ptr();
 
@@ -161,17 +159,7 @@ static THD_FUNCTION(ProcessImage, arg) {
 		//search for a line in the image and gets its width in pixels
 		lineWidth = extract_line_width(image);
 
-		//converts the width into a distance between the robot and the camera
-		if(lineWidth){
-			distance_cm = PXTOCM/lineWidth;
-		}
 
-		if(send_to_computer){
-			//sends to the computer the image
-			SendUint8ToComputer(image, IMAGE_BUFFER_SIZE);
-		}
-		//invert the bool
-		send_to_computer = !send_to_computer;
     }
 }
 
@@ -183,7 +171,16 @@ uint16_t get_line_position(void){
 	return line_position;
 }
 
+uint8_t has_found_line(void) {
+	return line_found;
+}
+
 void process_image_start(void){
-	chThdCreateStatic(waProcessImage, sizeof(waProcessImage), NORMALPRIO, ProcessImage, NULL);
-	chThdCreateStatic(waCaptureImage, sizeof(waCaptureImage), NORMALPRIO, CaptureImage, NULL);
+	prcs_img = chThdCreateStatic(waProcessImage, sizeof(waProcessImage), NORMALPRIO, ProcessImage, NULL);
+	cptr_img = chThdCreateStatic(waCaptureImage, sizeof(waCaptureImage), NORMALPRIO, CaptureImage, NULL);
+}
+
+void process_image_stop(void) {
+	chThdTerminate(prcs_img);
+	chThdTerminate(cptr_img);
 }
