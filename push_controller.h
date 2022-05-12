@@ -1,8 +1,8 @@
-#ifndef PI_REGULATOR_H
-#define PI_REGULATOR_H
+#ifndef PUSH_CONTROLLER_H
+#define PUSH_CONTROLLER_H
 
 //start the PI regulator thread
-void start_pi_move2obj(void);
-void stop_pi_move2obj(void);
+void start_push_controller(void);
+void stop_push_controller(void);
 
 #endif /* PI_REGULATOR_H */

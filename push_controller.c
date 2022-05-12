@@ -6,12 +6,13 @@
 
 
 #include <motors.h>
-#include <pi_regulator.h>
+#include <push_controller.h>
 #include <process_image.h>
 #include <sensors/proximity.h>
 #include <leds.h>
+#include <state_machine.h>
 
-#define SPEED 				350
+#define SPEED 				450
 #define ERROR_THRESHOLD			10.0f	//[cm] because of the noise of the camera
 #define KP						0.2f
 #define KI 						0.0f
@@ -26,7 +27,7 @@ enum state {FAR, CLOSE, STOP};
 static thread_t *push_thread;
 
 //simple PI regulator implementation
-int16_t pi_regulator(float dist_to_center, float goal){
+int16_t p_regulator(float dist_to_center, float goal){
 
 	float error = 0;
 	float speed_corr = 0;
@@ -96,7 +97,7 @@ static THD_FUNCTION(PushController, arg) {
     		break;
     	case CLOSE: //utilise une PID pour toujours rester en face de la cible
     		if (OBJECT_IS_FAR) {
-    			if (counter == 20) {
+    			if (counter == 10) {
     				current_state = STOP;
     				break;
     			}
@@ -105,7 +106,7 @@ static THD_FUNCTION(PushController, arg) {
     			counter = 0;
     		}
     		direction = left_IR - right_IR;
-    		speed_correction =  pi_regulator(direction, 0);
+    		speed_correction =  p_regulator(direction, 0);
 
     		//applies the rotation from the PI regulator
     		right_motor_set_speed(SPEED + speed_correction);
@@ -114,6 +115,8 @@ static THD_FUNCTION(PushController, arg) {
     	case STOP:
     		right_motor_set_speed(0);
     		left_motor_set_speed(0);
+    		request_state_change();
+    		chThdExit(0);
     	}
 
         //100Hz

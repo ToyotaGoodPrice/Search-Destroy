@@ -12,28 +12,13 @@
 #include <camera/po8030.h>
 #include <chprintf.h>
 #include <leds.h>
-#include <pi_regulator.h>
+#include <move2obj_controller.h>
 #include <process_image.h>
 #include <state_machine.h>
 
-void SendUint8ToComputer(uint8_t* data, uint16_t size) 
-{
-	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)"START", 5);
-	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)&size, sizeof(uint16_t));
-	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)data, size);
-}
-
-static void serial_start(void)
-{
-	static SerialConfig ser_cfg = {
-	    115200,
-	    0,
-	    0,
-	    0,
-	};
-
-	sdStart(&SD3, &ser_cfg); // UART3.
-}
+messagebus_t bus;
+MUTEX_DECL(bus_lock);
+CONDVAR_DECL(bus_condvar);
 
 int main(void)
 {
@@ -42,16 +27,17 @@ int main(void)
     chSysInit();
     mpu_init();
 
-    //starts the serial communication
-    serial_start();
-    //start the USB communication
-    usb_start();
+    messagebus_init(&bus, &bus_lock, &bus_condvar);
+
     //starts the camera
     dcmi_start();
 	po8030_start();
 	//inits the motors
 	motors_init();
-	//set_led(LED7, 1);
+
+	proximity_start();
+	calibrate_ir();
+    chThdSleepMilliseconds(2000);
 
 	process_image_start();
 	start_state_machine();

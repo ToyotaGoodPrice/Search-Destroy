@@ -66,6 +66,7 @@ uint16_t extract_line_width(uint16_t *buffer){
 		        }
 		        i++;
 		    }
+
 		    //if an end was not found
 		    if (i > IMAGE_BUFFER_SIZE || !end)
 		    {
@@ -92,6 +93,7 @@ uint16_t extract_line_width(uint16_t *buffer){
 		begin = 0;
 		end = 0;
 		width = last_width;
+		line_position = IMAGE_BUFFER_SIZE/2;
 		line_found = 0;
 		set_led(LED7, 0);
 	}else{
