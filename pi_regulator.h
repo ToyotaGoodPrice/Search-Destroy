@@ -2,7 +2,6 @@
 #define PI_REGULATOR_H
 
 //start the PI regulator thread
-void start_pi_move2obj(void);
-void stop_pi_move2obj(void);
+void pi_regulator_start(void);
 
 #endif /* PI_REGULATOR_H */
