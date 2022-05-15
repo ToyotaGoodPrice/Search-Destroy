@@ -15,13 +15,13 @@
 #define RED_THRESHOLD					0x4000
 #define GREEN_THRESHOLD					0x0120
 
+#define PIXEL_LINE						160
 #define BEGIN							0
 #define END								1
 #define DELTA							10
 #define CLAMP_BEGIN(begin)				((begin > 0) ? begin : 0)
 #define CLAMP_END(end)					((end < IMAGE_BUFFER_SIZE) ? end : IMAGE_BUFFER_SIZE - 1)
 
-static float distance_cm = 0;
 static uint16_t line_position = IMAGE_BUFFER_SIZE/2;	//middle
 static uint16_t interval[2] = {0, 0};
 static uint8_t line_found = 0;
@@ -42,6 +42,7 @@ uint8_t is_red_enough(uint16_t* buffer, uint16_t begin, uint16_t end) {
 	return (mean > GREEN_THRESHOLD);
 }
 
+
 uint8_t is_not_green(uint16_t* buffer, uint16_t begin, uint16_t end) {
 	uint16_t i = begin;
 	uint32_t mean = 0;
@@ -54,6 +55,7 @@ uint8_t is_not_green(uint16_t* buffer, uint16_t begin, uint16_t end) {
 	return (mean < GREEN_THRESHOLD);
 }
 
+//reprit en grand ligne du TP4
 int8_t find_line(uint16_t* buffer, uint16_t start, uint16_t finish, uint16_t color) {
 
 	uint8_t wrong_line = 1, line_not_found = 0, stop = 0;
@@ -131,7 +133,8 @@ void find_object(uint16_t *buffer) {
 	int16_t begin_red = 0, end_red = 0;
 
 	while(1) {
-		if (find_line(buffer, end_red, 639, BLUE)) {
+		//we check for a potential object using the blue channel
+		if (find_line(buffer, end_red, IMAGE_BUFFER_SIZE - 1 , BLUE)) {
 			begin_red = interval[BEGIN];
 			end_red = interval[END];
 			if (is_red_enough(buffer, begin_red, end_red) && is_not_green(buffer, begin_red, end_red)) {
@@ -153,14 +156,13 @@ void find_object(uint16_t *buffer) {
 }
 
 
-
+//reprit du TP4
 static THD_WORKING_AREA(waCaptureImage, 256);
 static THD_FUNCTION(CaptureImage, arg) {
 
     chRegSetThreadName(__FUNCTION__);
     (void)arg;
-	//Takes pixels 0 to IMAGE_BUFFER_SIZE of the line 10 + 11 (minimum 2 lines because reasons)
-	po8030_advanced_config(FORMAT_RGB565, 0, 160, IMAGE_BUFFER_SIZE, 2, SUBSAMPLING_X1, SUBSAMPLING_X1);
+	po8030_advanced_config(FORMAT_RGB565, 0, PIXEL_LINE, IMAGE_BUFFER_SIZE, 2, SUBSAMPLING_X1, SUBSAMPLING_X1);
 	dcmi_enable_double_buffering();
 	dcmi_set_capture_mode(CAPTURE_ONE_SHOT);
 	dcmi_prepare();
@@ -176,7 +178,6 @@ static THD_FUNCTION(CaptureImage, arg) {
     chThdExit(0);
 }
 
-
 static THD_WORKING_AREA(waProcessImage, 2048);
 static THD_FUNCTION(ProcessImage, arg) {
 
@@ -188,25 +189,16 @@ static THD_FUNCTION(ProcessImage, arg) {
     while(!chThdShouldTerminateX()){
     	//waits until an image has been captured
         chBSemWait(&image_ready_sem);
-        //set_led(LED3, 1);
 
-		//gets the pointer to the array filled with the last image in RGB565    
 		img_buff_ptr = dcmi_get_last_image_ptr();
-
-		//Extracts only the red pixels
 		for(uint16_t i = 0 ; i < (2 * IMAGE_BUFFER_SIZE) ; i+=2){
-			//extracts first 5bits of the first byte
-			//takes nothing from the second byte
+			//extracts all pixel information
 			image[i/2] = img_buff_ptr[i]<<8 | img_buff_ptr[i+1];
 		}
 
 		find_object(image);
     }
     chThdExit(0);
-}
-
-float get_distance_cm(void){
-	return distance_cm;
 }
 
 uint16_t get_line_position(void){

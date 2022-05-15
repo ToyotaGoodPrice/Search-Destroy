@@ -13,8 +13,6 @@
 #define SPEED 					450
 #define ERROR_THRESHOLD			10.0f
 #define KP						1.5f
-#define KI 						0.0f
-#define MAX_SUM_ERROR 			30.0f
 #define OBJ_LOST_COUNTER		20
 
 static thread_t *move_thread;
@@ -24,23 +22,14 @@ int16_t pi_regulator(float dist_to_center, float goal){
 	float error = 0;
 	float speed_corr = 0;
 
-	static float sum_error = 0;
-
 	error = dist_to_center - goal;
 
 	if(fabs(error) < ERROR_THRESHOLD){
 		return 0;
 	}
 
-	sum_error += error;
 
-	if(sum_error > MAX_SUM_ERROR){
-		sum_error = MAX_SUM_ERROR;
-	}else if(sum_error < -MAX_SUM_ERROR){
-		sum_error = -MAX_SUM_ERROR;
-	}
-
-	speed_corr = KP * error + KI * sum_error;
+	speed_corr = KP * error;
 
     return (int16_t)speed_corr;
 }
