@@ -7,9 +7,9 @@
 #include "hal.h"
 #include "memory_protection.h"
 #include <motors.h>
-#include <chprintf.h>
 #include <leds.h>
-#include <pi_regulator.h>
+#include <move2obj_controller.h>
+#include <push_controller.h>
 #include <process_image.h>
 
 #define ROTATION_SPEED		150
@@ -20,7 +20,8 @@ static BSEMAPHORE_DECL(state_changed, TRUE);
 static enum state system_state = SEARCHING;
 static thread_t *search_ctrl;
 
-void start_search_control();
+void start_search_control(void);
+void stop_search_control(void);
 
 static THD_WORKING_AREA(waSearchControl, 64);
 static THD_FUNCTION(SearchControl, arg) {
@@ -34,7 +35,6 @@ static THD_FUNCTION(SearchControl, arg) {
 		if (counter == 10) {
 			left_motor_set_speed(0);
 			right_motor_set_speed(0);
-			system_state = MOVE_TO_OBJECT;
 			chBSemSignal(&state_changed);
 		} else if (!has_found_line()){
 			counter = 0;
@@ -51,21 +51,30 @@ static THD_FUNCTION(StateMachine, arg) {
 	while(1) {
 		switch(system_state) {
 		case SEARCHING:
+			process_image_start();
 			left_motor_set_speed(ROTATION_SPEED);
 			right_motor_set_speed(-ROTATION_SPEED);
 			start_search_control();
+			chBSemWait(&state_changed);
+			system_state = MOVE_TO_OBJECT;
+			stop_search_control();
 			break;
 		case MOVE_TO_OBJECT:
-			stop_search_control();
 			start_pi_move2obj();
-			set_led(LED1, 1);
+			set_led(LED5, 1);
+			chBSemWait(&state_changed);
+			system_state = PUSH_OBJECT;
+			stop_pi_move2obj();
+			process_image_stop();
 			break;
 		case PUSH_OBJECT:
+			start_push_controller();
+			chBSemWait(&state_changed);
+			system_state = SEARCHING;
 			break;
 		default:
 			break;
 		}
-		chBSemWait(&state_changed);
 	}
 }
 
@@ -77,6 +86,12 @@ void stop_search_control() {
 	chThdTerminate(search_ctrl);
 }
 
-void start_state_machine() {
+//public functions
+
+void request_state_change(void) {
+	chBSemSignal(&state_changed);
+}
+
+void start_state_machine(void) {
 	chThdCreateStatic(waStateMachine, sizeof(waStateMachine), NORMALPRIO+1, StateMachine, NULL);
 }

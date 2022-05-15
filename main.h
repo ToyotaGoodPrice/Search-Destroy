@@ -19,17 +19,13 @@ extern "C" {
 #define PXTOCM					1570.0f //experimental value
 #define GOAL_DISTANCE 			10.0f
 #define MAX_DISTANCE 			25.0f
-#define ERROR_THRESHOLD			10.0f	//[cm] because of the noise of the camera
-#define KP						0.02f
-#define KI 						0.0f	//must not be zero
-#define MAX_SUM_ERROR 			30.0f
+
+void request_state_change(void);
 
 /** Robot wide IPC bus. */
 extern messagebus_t bus;
 
 extern parameter_namespace_t parameter_root;
-
-void SendUint8ToComputer(uint8_t* data, uint16_t size);
 
 #ifdef __cplusplus
 }

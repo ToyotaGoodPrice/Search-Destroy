@@ -6,59 +6,74 @@
 #include "ch.h"
 #include "hal.h"
 #include "memory_protection.h"
-#include <usbcfg.h>
 #include <main.h>
+#include <leds.h>
 #include <motors.h>
 #include <camera/po8030.h>
-#include <chprintf.h>
-#include <leds.h>
-#include <pi_regulator.h>
+#include <sensors/proximity.h>
+#include <move2obj_controller.h>
 #include <process_image.h>
-#include <state_machine.h>
+#include <search_control.h>
 
-void SendUint8ToComputer(uint8_t* data, uint16_t size) 
-{
-	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)"START", 5);
-	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)&size, sizeof(uint16_t));
-	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)data, size);
-}
+#define ROTATION_SPEED		150
+#define TEMPS_CALIBRATION	2000
 
-static void serial_start(void)
-{
-	static SerialConfig ser_cfg = {
-	    115200,
-	    0,
-	    0,
-	    0,
-	};
+messagebus_t bus;
+MUTEX_DECL(bus_lock);
+CONDVAR_DECL(bus_condvar);
 
-	sdStart(&SD3, &ser_cfg); // UART3.
-}
+enum state {IDLE, SEARCHING, MOVE_TO_OBJECT, PUSH_OBJECT};
+static BSEMAPHORE_DECL(state_changed, TRUE);
 
 int main(void)
 {
-
     halInit();
     chSysInit();
     mpu_init();
 
-    //starts the serial communication
-    serial_start();
-    //start the USB communication
-    usb_start();
+    messagebus_init(&bus, &bus_lock, &bus_condvar);
+
     //starts the camera
     dcmi_start();
 	po8030_start();
 	//inits the motors
 	motors_init();
-	//set_led(LED7, 1);
 
-	process_image_start();
-	start_state_machine();
+	proximity_start();
+	//Démarre le processus de calibration et laisse un délais pour le calibrer
+	calibrate_ir();
+    chThdSleepMilliseconds(TEMPS_CALIBRATION);
+
+	enum state system_state = SEARCHING;
+
     /* Infinite loop. */
     while (1) {
-    	//waits 1 second
-        chThdSleepMilliseconds(1000);
+		switch(system_state) {
+		case SEARCHING:
+			process_image_start();
+			left_motor_set_speed(ROTATION_SPEED);
+			right_motor_set_speed(-ROTATION_SPEED);
+			start_search_control();
+			chBSemWait(&state_changed);
+			system_state = MOVE_TO_OBJECT;
+			stop_search_control();
+			break;
+		case MOVE_TO_OBJECT:
+			start_pi_move2obj();
+			set_led(LED5, 1);
+			chBSemWait(&state_changed);
+			system_state = PUSH_OBJECT;
+			stop_pi_move2obj();
+			process_image_stop();
+			break;
+		case PUSH_OBJECT:
+			start_push_controller();
+			chBSemWait(&state_changed);
+			system_state = SEARCHING;
+			break;
+		default:
+			break;
+		}
     }
 }
 
@@ -68,4 +83,10 @@ uintptr_t __stack_chk_guard = STACK_CHK_GUARD;
 void __stack_chk_fail(void)
 {
     chSysHalt("Stack smashing detected");
+}
+
+//public functions
+
+void request_state_change(void) {
+	chBSemSignal(&state_changed);
 }

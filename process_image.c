@@ -15,7 +15,7 @@
 #define HAS_NO_GREEN(pxl)			((pxl & 0xF70) < 0x0120)
 //#define IS_RED_OBJECT_SLOPE(bfr)	()
 
-static float distance_cm = 0, angle = 0;
+static float distance_cm = 0;
 static uint16_t line_position = IMAGE_BUFFER_SIZE/2;	//middle
 static uint8_t line_found = 0;
 //semaphore
@@ -66,6 +66,7 @@ uint16_t extract_line_width(uint16_t *buffer){
 		        }
 		        i++;
 		    }
+
 		    //if an end was not found
 		    if (i > IMAGE_BUFFER_SIZE || !end)
 		    {
@@ -92,6 +93,7 @@ uint16_t extract_line_width(uint16_t *buffer){
 		begin = 0;
 		end = 0;
 		width = last_width;
+		line_position = IMAGE_BUFFER_SIZE/2;
 		line_found = 0;
 		set_led(LED7, 0);
 	}else{
@@ -120,8 +122,7 @@ static THD_FUNCTION(CaptureImage, arg) {
 	dcmi_set_capture_mode(CAPTURE_ONE_SHOT);
 	dcmi_prepare();
 
-    while(1){
-    	//set_led(LED3, 0);
+    while(!chThdShouldTerminateX()){
         //starts a capture
 		dcmi_capture_start();
 		//waits for the capture to be done
@@ -129,6 +130,7 @@ static THD_FUNCTION(CaptureImage, arg) {
 		//signals an image has been captured
 		chBSemSignal(&image_ready_sem);
     }
+    chThdExit(0);
 }
 
 
@@ -139,9 +141,8 @@ static THD_FUNCTION(ProcessImage, arg) {
     (void)arg;
 	uint8_t *img_buff_ptr;
 	uint16_t image[IMAGE_BUFFER_SIZE] = {0};
-	uint16_t lineWidth = 0;
 
-    while(1){
+    while(!chThdShouldTerminateX()){
     	//waits until an image has been captured
         chBSemWait(&image_ready_sem);
         //set_led(LED3, 1);
@@ -156,11 +157,9 @@ static THD_FUNCTION(ProcessImage, arg) {
 			image[i/2] = img_buff_ptr[i]<<8 | img_buff_ptr[i+1];
 		}
 
-		//search for a line in the image and gets its width in pixels
-		lineWidth = extract_line_width(image);
-
-
+		extract_line_width(image);
     }
+    chThdExit(0);
 }
 
 float get_distance_cm(void){
