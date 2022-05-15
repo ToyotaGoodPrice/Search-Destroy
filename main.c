@@ -14,6 +14,7 @@
 #include <move2obj_controller.h>
 #include <process_image.h>
 #include <search_control.h>
+#include <push_controller.h>
 
 #define ROTATION_SPEED		150
 #define TEMPS_CALIBRATION	2000
@@ -60,7 +61,6 @@ int main(void)
 			break;
 		case MOVE_TO_OBJECT:
 			start_pi_move2obj();
-			set_led(LED5, 1);
 			chBSemWait(&state_changed);
 			system_state = PUSH_OBJECT;
 			stop_pi_move2obj();

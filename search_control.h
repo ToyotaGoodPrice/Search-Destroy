@@ -8,6 +8,7 @@
 #ifndef STATE_MACHINE_H_
 #define STATE_MACHINE_H_
 
-void request_state_change(void);
+void start_search_control(void);
+void stop_search_control(void);
 
 #endif /* STATE_MACHINE_H_ */
