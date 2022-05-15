@@ -33,6 +33,7 @@ int16_t p_regulator(float dist_to_center, float goal){
 
 	error = dist_to_center - goal;
 
+	//Allume la LED du côté de la rotation
 	if (error < 0){
 		set_led(LED3, 1);
 		set_led(LED7, 0);
@@ -71,14 +72,17 @@ static THD_FUNCTION(PushController, arg) {
     	right_IR = get_calibrated_prox(0);
 
     	switch(current_state) {
-    	case FAR: //avance tout droit en attendant d'être en contact direct avec la cible
+    	case FAR:
+    		//avance tout droit en attendant d'être en contact direct avec la cible
     	    right_motor_set_speed(SPEED);
     	    left_motor_set_speed(SPEED);
+    	    //la distance d'un des capteurs doit être inférieure à la distance au moment de la calibration -> epuck proche
     		if (OBJECT_IS_CLOSE) {
     			current_state = CLOSE;
     		}
     		break;
-    	case CLOSE: //utilise un PID pour toujours rester en face de la cible en la poussant
+    	case CLOSE:
+    	    //la distance des deux capteurs doit être supérieure à la distance au moment de la calibration -> objet tombé ou perdu
     		if (OBJECT_IS_FAR) {
     			if (counter == STOP_COUNTER) {
     				current_state = STOP;
@@ -89,6 +93,7 @@ static THD_FUNCTION(PushController, arg) {
     			counter = 0;
     		}
     		direction = left_IR - right_IR;
+    		//utilise un PID pour toujours rester en face de la cible en la poussant
     		speed_correction =  p_regulator(direction, 0);
 
     		//applies the rotation from the PI regulator
