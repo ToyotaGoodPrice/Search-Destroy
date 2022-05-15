@@ -6,12 +6,11 @@
 #include "ch.h"
 #include "hal.h"
 #include "memory_protection.h"
-#include <usbcfg.h>
+//#include <usbcfg.h>
 #include <main.h>
 #include <motors.h>
 #include <camera/po8030.h>
-#include <chprintf.h>
-#include <leds.h>
+#include <sensors/proximity.h>
 #include <move2obj_controller.h>
 #include <process_image.h>
 #include <state_machine.h>
@@ -22,7 +21,6 @@ CONDVAR_DECL(bus_condvar);
 
 int main(void)
 {
-
     halInit();
     chSysInit();
     mpu_init();
@@ -36,11 +34,12 @@ int main(void)
 	motors_init();
 
 	proximity_start();
+	//Démarre le processus de calibration
 	calibrate_ir();
     chThdSleepMilliseconds(2000);
 
-	process_image_start();
 	start_state_machine();
+
     /* Infinite loop. */
     while (1) {
     	//waits 1 second

@@ -4,7 +4,6 @@
 #include <usbcfg.h>
 #include <chprintf.h>
 
-
 #include <state_machine.h>
 #include <motors.h>
 #include <move2obj_controller.h>
@@ -17,7 +16,6 @@
 #define MAX_SUM_ERROR 			30.0f
 
 static thread_t *move_thread;
-
 
 int16_t pi_regulator(float dist_to_center, float goal){
 

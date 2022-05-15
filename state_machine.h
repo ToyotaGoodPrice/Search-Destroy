@@ -8,7 +8,7 @@
 #ifndef STATE_MACHINE_H_
 #define STATE_MACHINE_H_
 
-void start_state_machine();
-void request_state_change();
+void start_state_machine(void);
+void request_state_change(void);
 
 #endif /* STATE_MACHINE_H_ */
