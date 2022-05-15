@@ -9,43 +9,72 @@
 #include <process_image.h>
 #include <motors.h>
 
-#define IS_RED(pxl) 				((pxl & 0xF800) >= 0x8800)
-#define IS_NOT_RED(pxl)				((pxl & 0xF800) < 0x8800)
-#define HAS_GREEN(pxl) 				((pxl & 0xF70) >= 0x0120)
-#define HAS_NO_GREEN(pxl)			((pxl & 0xF70) < 0x0120)
-//#define IS_RED_OBJECT_SLOPE(bfr)	()
+#define RED								0xF800
+#define GREEN							0x07E0
+#define BLUE							0x001F
+#define RED_THRESHOLD					0x4000
+#define GREEN_THRESHOLD					0x0120
+
+#define BEGIN							0
+#define END								1
+#define DELTA							10
+#define CLAMP_BEGIN(begin)				((begin > 0) ? begin : 0)
+#define CLAMP_END(end)					((end < IMAGE_BUFFER_SIZE) ? end : IMAGE_BUFFER_SIZE - 1)
 
 static float distance_cm = 0;
 static uint16_t line_position = IMAGE_BUFFER_SIZE/2;	//middle
+static uint16_t interval[2] = {0, 0};
 static uint8_t line_found = 0;
+
 //semaphore
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);
 static thread_t *cptr_img, *prcs_img;
 
-/*
- *  Returns the line's width extracted from the image buffer given
- *  Returns 0 if line not found
- */
-uint16_t extract_line_width(uint16_t *buffer){
-	uint16_t i = 0, begin = 0, end = 0, width = 0;
-	uint8_t stop = 0, wrong_line = 0, line_not_found = 0;
+uint8_t is_red_enough(uint16_t* buffer, uint16_t begin, uint16_t end) {
+	uint16_t i = begin;
 	uint32_t mean = 0;
-	static uint16_t last_width = PXTOCM/GOAL_DISTANCE;
 
-	//performs an average
-	for(uint16_t i = 0 ; i < IMAGE_BUFFER_SIZE ; i++){
-		mean += buffer[i];
+	while (i <= end) {
+		mean += ((uint16_t)buffer[i] & RED);
+		i++;
 	}
-	mean /= IMAGE_BUFFER_SIZE;
+	mean /= (end - begin + 1);
+	return (mean > GREEN_THRESHOLD);
+}
+
+uint8_t is_not_green(uint16_t* buffer, uint16_t begin, uint16_t end) {
+	uint16_t i = begin;
+	uint32_t mean = 0;
+
+	while (i <= end) {
+		mean += ((uint16_t)buffer[i] & GREEN);
+		i++;
+	}
+	mean /= (end - begin + 1);
+	return (mean < GREEN_THRESHOLD);
+}
+
+int8_t find_line(uint16_t* buffer, uint16_t start, uint16_t finish, uint16_t color) {
+
+	uint8_t wrong_line = 1, line_not_found = 0, stop = 0;
+	uint16_t i = start, begin = 0, end = 0;
+	uint32_t mean = 0;
+
+	while (i <= finish) {
+		mean += (buffer[i] & color);
+		i++;
+	}
+	mean /= finish - start + 1;
+	i = start;
 
 	do{
 		wrong_line = 0;
 		//search for a begin
-		while(stop == 0 && i < (IMAGE_BUFFER_SIZE - WIDTH_SLOPE))
-		{ 
+		while(stop == 0 && i <= (finish - WIDTH_SLOPE))
+		{
 			//the slope must at least be WIDTH_SLOPE wide and is compared
 		    //to the mean of the image
-		    if(buffer[i] > mean && buffer[i+WIDTH_SLOPE] < mean)
+		    if(((uint16_t)buffer[i] & color) > mean && ((uint16_t)buffer[i+WIDTH_SLOPE] & color) < mean)
 		    {
 		        begin = i;
 		        stop = 1;
@@ -53,20 +82,19 @@ uint16_t extract_line_width(uint16_t *buffer){
 		    i++;
 		}
 		//if a begin was found, search for an end
-		if (i < (IMAGE_BUFFER_SIZE - WIDTH_SLOPE) && begin)
+		if (i <= (finish - WIDTH_SLOPE) && begin)
 		{
 		    stop = 0;
 
-		    while(stop == 0 && i < IMAGE_BUFFER_SIZE)
+		    while(stop == 0 && i <= finish)
 		    {
-		        if(buffer[i] > mean && buffer[i-WIDTH_SLOPE] < mean)
+		        if(((uint16_t)buffer[i] & color) > mean && ((uint16_t)buffer[i-WIDTH_SLOPE] & color) < mean)
 		        {
 		            end = i;
 		            stop = 1;
 		        }
 		        i++;
 		    }
-
 		    //if an end was not found
 		    if (i > IMAGE_BUFFER_SIZE || !end)
 		    {
@@ -86,30 +114,45 @@ uint16_t extract_line_width(uint16_t *buffer){
 			stop = 0;
 			wrong_line = 1;
 		}
-
 	}while(wrong_line);
 
-	if(line_not_found){
-		begin = 0;
-		end = 0;
-		width = last_width;
-		line_position = IMAGE_BUFFER_SIZE/2;
-		line_found = 0;
-		set_led(LED7, 0);
-	}else{
-		last_width = width = (end - begin);
-		line_position = (begin + end)/2; //gives the line position.
-		line_found = 1;
-		set_led(LED7, 1);
-	}
-
-	//sets a maximum width or returns the measured width
-	if((PXTOCM/width) > MAX_DISTANCE){
-		return PXTOCM/MAX_DISTANCE;
-	}else{
-		return width;
+	if (line_not_found == 0) {
+		interval[BEGIN] = begin;
+		interval[END] = end;
+		return 1;
+	} else {
+		interval[BEGIN] = 0;
+		interval[END] = 0;
+		return 0;
 	}
 }
+
+void find_object(uint16_t *buffer) {
+	int16_t begin_red = 0, end_red = 0;
+
+	while(1) {
+		if (find_line(buffer, end_red, 639, BLUE)) {
+			begin_red = interval[BEGIN];
+			end_red = interval[END];
+			if (is_red_enough(buffer, begin_red, end_red) && is_not_green(buffer, begin_red, end_red)) {
+				set_led(LED5, 1);
+				line_position = (begin_red + end_red)/2;
+				line_found = 1;
+				break;
+			} else {
+				set_led(LED5, 0);
+			}
+		}
+		else
+		{
+			set_led(LED5, 0);
+			line_found = 0;
+			break;
+		}
+	}
+}
+
+
 
 static THD_WORKING_AREA(waCaptureImage, 256);
 static THD_FUNCTION(CaptureImage, arg) {
@@ -157,7 +200,7 @@ static THD_FUNCTION(ProcessImage, arg) {
 			image[i/2] = img_buff_ptr[i]<<8 | img_buff_ptr[i+1];
 		}
 
-		extract_line_width(image);
+		find_object(image);
     }
     chThdExit(0);
 }

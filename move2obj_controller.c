@@ -12,10 +12,10 @@
 
 #define SPEED 					450
 #define ERROR_THRESHOLD			10.0f
-#define KP						0.8f
+#define KP						1.5f
 #define KI 						0.0f
 #define MAX_SUM_ERROR 			30.0f
-#define OBJ_LOST_COUNTER		10
+#define OBJ_LOST_COUNTER		20
 
 static thread_t *move_thread;
 

@@ -1,8 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-
 #include "ch.h"
 #include "hal.h"
 #include "memory_protection.h"
@@ -21,10 +16,9 @@ void stop_search_control(void);
 
 static THD_WORKING_AREA(waSearchControl, 64);
 static THD_FUNCTION(SearchControl, arg) {
+	chRegSetThreadName(__FUNCTION__);
 	systime_t time;
 	int8_t counter = 0;
-	chRegSetThreadName(__FUNCTION__);
-
 	while(!chThdShouldTerminateX()) {
 		time = chVTGetSystemTime();
 		//un compteur permet de limiter les fausses détections d'objets
@@ -44,10 +38,10 @@ static THD_FUNCTION(SearchControl, arg) {
 
 //Public functions
 
-void start_search_control() {
+void start_search_control(void) {
 	search_ctrl = chThdCreateStatic(waSearchControl, sizeof(waSearchControl), NORMALPRIO, SearchControl, NULL);
 }
 
-void stop_search_control() {
+void stop_search_control(void) {
 	chThdTerminate(search_ctrl);
 }
