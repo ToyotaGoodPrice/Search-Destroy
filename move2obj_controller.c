@@ -4,16 +4,18 @@
 #include <usbcfg.h>
 #include <chprintf.h>
 
-#include <state_machine.h>
+#include <main.h>
+#include <search_control.h>
 #include <motors.h>
 #include <move2obj_controller.h>
 #include <process_image.h>
 
-#define SPEED 		450
+#define SPEED 					450
 #define ERROR_THRESHOLD			10.0f
 #define KP						0.8f
 #define KI 						0.0f
 #define MAX_SUM_ERROR 			30.0f
+#define OBJ_LOST_COUNTER		10
 
 static thread_t *move_thread;
 
@@ -57,15 +59,15 @@ static THD_FUNCTION(Move2Obj, arg) {
     while(!chThdShouldTerminateX()){
         time = chVTGetSystemTime();
         counter++;
-        if (counter == 10) {
+        if (counter == OBJ_LOST_COUNTER) {
         	request_state_change();
     		right_motor_set_speed(0);
     		left_motor_set_speed(0);
         	chThdExit(0);
        	} else if (has_found_line()){
-   			counter = 0;
+   			counter = 0; //reset counter
      	}
-        speed_correction =  pi_regulator(get_line_position() - 320, 0);
+        speed_correction =  pi_regulator(get_line_position() - IMAGE_BUFFER_SIZE/2, 0);
 
 		right_motor_set_speed(SPEED - speed_correction);
 		left_motor_set_speed(SPEED + speed_correction);

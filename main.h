@@ -20,12 +20,12 @@ extern "C" {
 #define GOAL_DISTANCE 			10.0f
 #define MAX_DISTANCE 			25.0f
 
+void request_state_change(void);
+
 /** Robot wide IPC bus. */
 extern messagebus_t bus;
 
 extern parameter_namespace_t parameter_root;
-
-void SendUint8ToComputer(uint8_t* data, uint16_t size);
 
 #ifdef __cplusplus
 }
